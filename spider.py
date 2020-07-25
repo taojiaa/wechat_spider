@@ -3,7 +3,6 @@ import requests
 import time
 from bs4 import BeautifulSoup
 from pymongo import MongoClient
-from dotenv import load_dotenv
 
 
 class WechatSpider:
@@ -154,8 +153,8 @@ class WechatSpider:
 
 
 def main():
-    load_dotenv()
-    ws = WechatSpider('华东理工大学')
+    nickname = '华东理工大学'
+    ws = WechatSpider(nickname)
     ws.run(15)
 
 
