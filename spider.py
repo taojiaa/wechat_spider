@@ -1,8 +1,12 @@
 import os
 import requests
 import time
+import urllib3
+import re
 from bs4 import BeautifulSoup
 from pymongo import MongoClient
+
+urllib3.disable_warnings()
 
 
 class WechatSpider:
@@ -20,7 +24,7 @@ class WechatSpider:
             "Cookie":
             self.cookie,
             "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.119 Safari/537.36",
+            "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0Chrome/57.0.2987.132 MQQBrowser/6.2 Mobile",
         }
 
         official_info = self.__get_official_info()
@@ -98,6 +102,7 @@ class WechatSpider:
     def get_article_info(self, item):
         url = item['link']
         appmsgstat = self.get_article_stat(url)
+        comments = self.get_article_comment(url)
         info = {
             "title": item['title'],
             "readNum": appmsgstat.get('read_num', 0),
@@ -106,6 +111,7 @@ class WechatSpider:
             "date": self.__convert_date(item['update_time']),
             "url": item['link'],
             'content': self.__crawl_article_content(url),
+            'comment': comments
         }
         return info
 
@@ -143,6 +149,70 @@ class WechatSpider:
         except KeyError:
             print('The token has been expired.')
 
+    def get_article_comment(self, content_url):
+        try:
+            resp = requests.get(content_url, headers=self.headers, verify=False)
+        except Exception:
+            print('Cannot get comments.')
+        else:
+            html = resp.text
+            str_comment = re.search(r'var comment_id = "(.*)" \|\| "(.*)" \* 1;', html)
+            str_msg = re.search(r'var appmsgid = (.*?);', html)
+            str_msg = re.search(r"\d+", str_msg.group(1))
+            str_msg = str_msg.group(0)
+
+            if str_comment and str_msg:
+                comment_id = str_comment.group(1)
+                app_msg_id = str_msg
+
+                if app_msg_id and comment_id:
+                    comments = self.__crawl_comments(app_msg_id, comment_id)
+                    return comments
+
+    def __crawl_comments(self, app_msg_id, comment_id):
+        params = {
+            'action': 'getcomment',
+            'appmsgid': app_msg_id,
+            'comment_id': comment_id,
+            'offset': '0',
+            'limit': '100',
+            'uin': self.uin,
+            'key': self.key,
+            'pass_ticket': self.pass_ticket,
+            'wxtoken': '777',
+            '__biz': self.fake_id,
+            'appmsg_token': self.appmsg_token,
+            'x5': '0',
+            'f': 'json',
+            'scene': '0'
+        }
+
+        api = 'https://mp.weixin.qq.com/mp/appmsg_comment'
+
+        try:
+            resp = requests.get(api, headers=self.headers, params=params, verify=False).json()
+        except Exception:
+            pass
+        else:
+            comments = []
+            ret, status = resp['base_resp']['ret'], resp['base_resp']['errmsg']
+            if ret == 0 or status == 'ok':
+                elected_comment = resp['elected_comment']
+                for comment in elected_comment:
+                    nick_name = comment.get('nick_name')
+                    comment_time = self.__convert_date(comment.get('create_time'))
+                    content = comment.get('content')
+                    content_id = comment.get('content_id')
+                    like_num = comment.get('like_num')
+                    comments.append({
+                        'content_id': content_id,
+                        'nickname': nick_name,
+                        'commentTime': comment_time,
+                        'content': content,
+                        'likeNum': like_num
+                    })
+            return comments
+
     def save_mongo(self, data):
         host = "127.0.0.1"
         port = 27017
@@ -153,9 +223,9 @@ class WechatSpider:
 
 
 def main():
-    nickname = '华东理工大学'
+    nickname = '范德依彪'
     ws = WechatSpider(nickname)
-    ws.run(15)
+    ws.run(5)
 
 
 if __name__ == '__main__':
