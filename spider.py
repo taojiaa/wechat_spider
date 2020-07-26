@@ -31,7 +31,7 @@ class WechatSpider:
         self.fake_id = official_info['fakeid']
         self.alias = official_info['alias']
 
-        self.client = MongoClient(os.getenv('MONGO_HOST'), os.getenv('MONGO_PORT'))
+        self.client = MongoClient(os.getenv('MONGO_URL'))
 
     def __get_official_info(self):
         search_url = "https://mp.weixin.qq.com/cgi-bin/searchbiz"
@@ -221,7 +221,7 @@ class WechatSpider:
 
 
 def main():
-    nickname = '范德依彪'
+    nickname = '中南财经政法大学'
     ws = WechatSpider(nickname)
     ws.run(5)
 
