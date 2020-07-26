@@ -218,16 +218,18 @@ class WechatSpider:
                     comments.append({
                         'content_id': content_id,
                         'nickname': nick_name,
-                        'commentTime': comment_time,
+                        'comment_time': comment_time,
                         'content': content,
-                        'likeNum': like_num
+                        'like_num': like_num
                     })
             return comments
 
     def save_mongo(self, data):
-        # check the id
         collection = self.client['wechat'][self.nickname]
-        collection.insert_many(data)
+        inserted_articles = set(item['article_id'] for item in collection.find({}, {'_id': 0, 'article_id': 1}))
+        for info in data:
+            if info['article_id'] not in inserted_articles:
+                collection.insert_one(data)
 
 
 def main():
