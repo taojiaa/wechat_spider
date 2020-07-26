@@ -72,8 +72,7 @@ class WechatSpider:
                 content = ''.join(content_list)
                 return content
 
-    def run(self, num):
-        begin, count = 0, 5
+    def run(self, num, begin=0, count=1):
         while begin < num:
             page_info = []
             time.sleep(1)
@@ -160,12 +159,10 @@ class WechatSpider:
             html = resp.text
             str_comment = re.search(r'var comment_id = "(.*)" \|\| "(.*)" \* 1;', html)
             str_msg = re.search(r'var appmsgid = (.*?);', html)
-            str_msg = re.search(r"\d+", str_msg.group(1))
-            str_msg = str_msg.group(0)
 
             if str_comment and str_msg:
                 comment_id = str_comment.group(1)
-                app_msg_id = str_msg
+                app_msg_id = re.search(r"\d+", str_msg.group(1)).group(0)
 
                 if app_msg_id and comment_id:
                     comments = self.__crawl_comments(app_msg_id, comment_id)
@@ -223,7 +220,7 @@ class WechatSpider:
 def main():
     nickname = '中南财经政法大学'
     ws = WechatSpider(nickname)
-    ws.run(5)
+    ws.run(num=4, begin=0, count=1)
 
 
 if __name__ == '__main__':
