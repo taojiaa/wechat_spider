@@ -57,32 +57,18 @@ class WechatSpider:
         date = time.strftime("%Y-%m-%d %H:%M:%S", timearr)
         return date
 
-    def __crawl_article_content(self, content_url):
-        try:
-            html = requests.get(content_url, verify=False).text
-        except Exception:
-            print(content_url)
-            pass
-        else:
-            bs = BeautifulSoup(html, 'html.parser')
-            js_content = bs.find(id='js_content')
-            if js_content:
-                p_list = js_content.find_all('p')
-                content_list = list(map(lambda p: p.text, filter(lambda p: p.text != '', p_list)))
-                content = ''.join(content_list)
-                return content
-
     def run(self, num, begin=0, count=1):
         while begin < num:
             page_info = []
             time.sleep(1)
-            ls = self.get_article_list(begin, count)
-            if "app_msg_list" in ls:
-                for item in ls["app_msg_list"]:
-                    info = self.get_article_info(item)
-                    page_info.append(info)
-                self.save_mongo(page_info)
-            print(f"Articles of page {begin // count + 1} has been inserted to the database.")
+            resp = self.get_article_list(begin, count)
+            if resp['base_resp']['err_msg'] == 'ok' and resp['base_resp']['ret'] == 0:
+                if "app_msg_list" in resp:
+                    for item in resp["app_msg_list"]:
+                        info = self.get_article_info(item)
+                        page_info.append(info)
+                    self.save_mongo(page_info)
+                print(f"Articles of page {begin // count + 1} has been inserted to the database.")
             begin += count
 
     def get_article_list(self, begin, count):
@@ -102,25 +88,46 @@ class WechatSpider:
 
     def get_article_info(self, item):
         url = item['link']
-        appmsgstat = self.get_article_stat(url)
-        comments = self.get_article_comment(url)
+        info_stats = self.get_article_stats(url)
+        info_contents = self.get_article_contents(url)
+        info_comments = self.get_article_comments(url)
         info = {
+            "article_id": item['aid'],
             "title": item['title'],
-            "readNum": appmsgstat.get('read_num', 0),
-            "likeNum": appmsgstat.get('like_num', 0),
             "digest": item['digest'],
             "date": self.__convert_date(item['update_time']),
             "url": item['link'],
-            'content': self.__crawl_article_content(url),
-            'comment': comments
         }
+        info.update(info_stats)
+        info.update(info_contents)
+        info.update(info_comments)
         return info
 
-    def get_article_stat(self, link):
-        mid = link.split("&")[1].split("=")[1]
-        idx = link.split("&")[2].split("=")[1]
-        sn = link.split("&")[3].split("=")[1]
-        _biz = link.split("&")[0].split("_biz=")[1]
+    def get_article_contents(self, article_url):
+        info_content = {}
+        try:
+            html = requests.get(article_url, verify=False).text
+        except Exception:
+            pass
+        else:
+            bs = BeautifulSoup(html, 'html.parser')
+            js_content = bs.find(id='js_content')
+            if js_content:
+                p_list = js_content.find_all('p')
+                content_list = list(map(lambda p: p.text, filter(lambda p: p.text != '', p_list)))
+                info_content['content'] = ''.join(content_list)
+
+                if js_content.find(attrs={'class': 'video_iframe rich_pages'}):
+                    info_content['builtInVideo'] = True
+                else:
+                    info_content['builtInVideo'] = False
+        return info_content
+
+    def get_article_stats(self, article_url):
+        mid = article_url.split("&")[1].split("=")[1]
+        idx = article_url.split("&")[2].split("=")[1]
+        sn = article_url.split("&")[3].split("=")[1]
+        _biz = article_url.split("&")[0].split("_biz=")[1]
 
         url = "http://mp.weixin.qq.com/mp/getappmsgext"
         headers = {
@@ -144,16 +151,20 @@ class WechatSpider:
             "wxtoken": "777",
         }
 
-        content = requests.post(url, headers=headers, data=data, params=params).json()
-        time.sleep(1)
+        info_stats = {}
+        resp = requests.post(url, headers=headers, data=data, params=params).json()
+
         try:
-            return content['appmsgstat']
+            info_stats['read_num'] = resp['read_num']
+            info_stats['like_num'] = resp['like_num']
+            return info_stats
         except KeyError:
             print('The token has been expired.')
 
-    def get_article_comment(self, content_url):
+    def get_article_comments(self, article_url):
+        info_comments = {}
         try:
-            resp = requests.get(content_url, headers=self.headers, verify=False)
+            resp = requests.get(article_url, headers=self.headers, verify=False)
         except Exception:
             print('Cannot get comments.')
         else:
@@ -166,8 +177,8 @@ class WechatSpider:
                 app_msg_id = re.search(r"\d+", str_msg.group(1)).group(0)
 
                 if app_msg_id and comment_id:
-                    comments = self.__crawl_comments(app_msg_id, comment_id)
-                    return comments
+                    info_comments['comments'] = self.__crawl_comments(app_msg_id, comment_id)
+        return info_comments
 
     def __crawl_comments(self, app_msg_id, comment_id):
         params = {
@@ -214,14 +225,15 @@ class WechatSpider:
             return comments
 
     def save_mongo(self, data):
+        # check the id
         collection = self.client['wechat'][self.nickname]
         collection.insert_many(data)
 
 
 def main():
-    nickname = '中南财经政法大学'
+    nickname = '华东理工大学'
     ws = WechatSpider(nickname)
-    ws.run(num=4, begin=0, count=1)
+    ws.run(num=15, begin=0, count=5)
 
 
 if __name__ == '__main__':
