@@ -31,6 +31,8 @@ class WechatSpider:
         self.fake_id = official_info['fakeid']
         self.alias = official_info['alias']
 
+        self.client = MongoClient(os.getenv('MONGO_HOST'), os.getenv('MONGO_PORT'))
+
     def __get_official_info(self):
         search_url = "https://mp.weixin.qq.com/cgi-bin/searchbiz"
         params = {
@@ -214,11 +216,7 @@ class WechatSpider:
             return comments
 
     def save_mongo(self, data):
-        host = "127.0.0.1"
-        port = 27017
-
-        client = MongoClient(host, port)
-        collection = client['wechat'][self.nickname]
+        collection = self.client['wechat'][self.nickname]
         collection.insert_many(data)
 
 
