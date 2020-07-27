@@ -118,9 +118,9 @@ class WechatSpider:
                 info_content['content'] = ''.join(content_list)
 
                 if js_content.find(attrs={'class': 'video_iframe rich_pages'}):
-                    info_content['builtInVideo'] = True
+                    info_content['builtin_video'] = True
                 else:
-                    info_content['builtInVideo'] = False
+                    info_content['builtin_video'] = False
         return info_content
 
     def get_article_stats(self, article_url):
