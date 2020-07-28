@@ -34,7 +34,7 @@ class WechatSpider:
         self.client = MongoClient(os.getenv('MONGO_URL'))
 
     def __get_official_info(self):
-        search_url = "https://mp.weixin.qq.com/cgi-bin/searchbiz"
+        api = "https://mp.weixin.qq.com/cgi-bin/searchbiz"
         params = {
             "query": self.nickname,
             "count": '5',
@@ -47,7 +47,7 @@ class WechatSpider:
         }
 
         try:
-            official = requests.get(search_url, headers=self.headers, params=params, verify=False)
+            official = requests.get(api, headers=self.headers, params=params, verify=False)
             return official.json()["list"][0]
         except Exception:
             raise Exception("The public name doesn't match.")
@@ -72,7 +72,7 @@ class WechatSpider:
             begin += count
 
     def get_article_list(self, begin, count):
-        url = "https://mp.weixin.qq.com/cgi-bin/appmsg"
+        api = "https://mp.weixin.qq.com/cgi-bin/appmsg"
         params = {
             "token": self.token,
             "lang": "zh_CN",
@@ -84,7 +84,7 @@ class WechatSpider:
             "fakeid": self.fake_id,
             "type": '9',
         }
-        return requests.get(url, headers=self.headers, params=params, verify=False).json()
+        return requests.get(api, headers=self.headers, params=params, verify=False).json()
 
     def get_article_info(self, item):
         url = item['link']
@@ -93,7 +93,7 @@ class WechatSpider:
         info_comments = self.get_article_comments(url)
         info = {
             "article_id": item['aid'],
-            "type": 'article' if item['item_show_type'] == 0 else "video",
+            "type": 'video' if item['item_show_type'] == 5 else "article",
             "title": item['title'],
             "digest": item['digest'],
             "date": self.__convert_date(item['update_time']),
@@ -130,13 +130,14 @@ class WechatSpider:
         sn = article_url.split("&")[3].split("=")[1]
         _biz = article_url.split("&")[0].split("_biz=")[1]
 
-        url = "http://mp.weixin.qq.com/mp/getappmsgext"
-        headers = {
-            "Cookie":
-            "rewardsn=;wxtokenkey=777;wxuin=683053783;devicetype=iPhoneiOS13.5.1;version=17000e28;lang=zh_CN",
-            "User-Agent":
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36 MicroMessenger/6.5.2.501 NetType/WIFI WindowsWechat QBCore/3.43.901.400 QQBrowser/9.0.2524.400"
-        }
+        api = "http://mp.weixin.qq.com/mp/getappmsgext"
+        # headers = {
+        # "Cookie":
+        # "rewardsn=;wxtokenkey=777;wxuin=683053783;devicetype=iPhoneiOS13.5.1;version=17000e28;lang=zh_CN",
+        # "User-Agent":
+        # "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 \
+        # Safari/537.36 MicroMessenger/6.5.2.501 NetType/WIFI WindowsWechat QBCore/3.43.901.400 QQBrowser/9.0.2524.400"
+        # }
         data = {"is_only_read": "1", "is_temp_url": "0", "appmsg_type": "9", 'reward_uin_count': '0'}
 
         params = {
@@ -151,14 +152,14 @@ class WechatSpider:
             "wxtoken": "777",
         }
         info_stats = {}
-        resp = requests.post(url, headers=headers, data=data, params=params).json()
+        resp = requests.post(api, headers=self.headers, data=data, params=params).json()
         try:
             resp_stat = resp['appmsgstat']
             info_stats['read_num'] = resp_stat['read_num']
             info_stats['like_num'] = resp_stat['like_num']
             return info_stats
         except KeyError:
-            print('The token has been expired.')
+            print('The appmsg_token, key, or pass ticket is incorrect.')
 
     def get_article_comments(self, article_url):
         info_comments = {}
@@ -232,7 +233,7 @@ class WechatSpider:
 
 
 def main():
-    nickname = '大气爱智慧'
+    nickname = '饭统戴老板'
     ws = WechatSpider(nickname)
     ws.run(num=15, begin=0, count=5)
 
