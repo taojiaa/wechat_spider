@@ -1,102 +1,27 @@
-import os
 import requests
-import time
 import urllib3
 import re
 from bs4 import BeautifulSoup
-from pymongo import MongoClient
+from utils import convert_date
 
 urllib3.disable_warnings()
 
 
-class WechatSpider:
-    def __init__(self, nickname):
-        self.nickname = nickname
-
-        self.token = os.getenv('TOKEN')
-        self.cookie = os.getenv('COOKIE')
-        self.pass_ticket = os.getenv('PASS_TICKET')
-        self.appmsg_token = os.getenv('APPMSG_TOKEN')
-        self.key = os.getenv('KEY')
-        self.uin = os.getenv('UIN')
-
-        self.headers = {
-            "Cookie":
-            self.cookie,
-            "User-Agent":
-            "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0Chrome/57.0.2987.132 MQQBrowser/6.2 Mobile",
-        }
-
-        official_info = self.__get_official_info()
-        self.fake_id = official_info['fakeid']
-        self.alias = official_info['alias']
-
-        self.client = MongoClient(os.getenv('MONGO_URL'))
-
-    def __get_official_info(self):
-        api = "https://mp.weixin.qq.com/cgi-bin/searchbiz"
-        params = {
-            "query": self.nickname,
-            "count": '5',
-            "action": "search_biz",
-            "ajax": "1",
-            "begin": '0',
-            "lang": "zh_CN",
-            "f": "json",
-            'token': self.token
-        }
-
-        try:
-            official = requests.get(api, headers=self.headers, params=params, verify=False)
-            return official.json()["list"][0]
-        except Exception:
-            raise Exception("The public name doesn't match.")
-
-    def __convert_date(self, times):
-        timearr = time.localtime(times)
-        date = time.strftime("%Y-%m-%d %H:%M:%S", timearr)
-        return date
-
-    def run(self, num, begin=0, count=1):
-        while begin < num:
-            page_info = []
-            time.sleep(1)
-            resp = self.get_article_list(begin, count)
-            if resp['base_resp']['err_msg'] == 'ok' and resp['base_resp']['ret'] == 0:
-                if "app_msg_list" in resp:
-                    for item in resp["app_msg_list"]:
-                        info = self.get_article_info(item)
-                        page_info.append(info)
-                    self.save_mongo(page_info)
-                print(f"Articles of page {begin // count + 1} has been inserted to the database.")
-            begin += count
-
-    def get_article_list(self, begin, count):
-        api = "https://mp.weixin.qq.com/cgi-bin/appmsg"
-        params = {
-            "token": self.token,
-            "lang": "zh_CN",
-            "f": "json",
-            "ajax": "1",
-            "action": "list_ex",
-            "begin": str(begin),
-            "count": str(count),
-            "fakeid": self.fake_id,
-            "type": '9',
-        }
-        return requests.get(api, headers=self.headers, params=params, verify=False).json()
+class ArticleSpider:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
 
     def get_article_info(self, item):
         url = item['link']
-        info_stats = self.get_article_stats(url)
-        info_contents = self.get_article_contents(url)
-        info_comments = self.get_article_comments(url)
+        info_stats = self._get_article_stats(url)
+        info_contents = self._get_article_contents(url)
+        info_comments = self._get_article_comments(url)
         info = {
             "article_id": item['aid'],
             "type": 'video' if item['item_show_type'] == 5 else "article",
             "title": item['title'],
             "digest": item['digest'],
-            "date": self.__convert_date(item['update_time']),
+            "date": convert_date(item['update_time']),
             "url": item['link'],
         }
         info.update(info_stats)
@@ -104,12 +29,12 @@ class WechatSpider:
         info.update(info_comments)
         return info
 
-    def get_article_contents(self, article_url):
+    def _get_article_contents(self, article_url):
         info_content = {}
         try:
             html = requests.get(article_url, verify=False).text
         except Exception:
-            pass
+            print('Cannot get the article contents.')
         else:
             bs = BeautifulSoup(html, 'html.parser')
             js_content = bs.find(id='js_content')
@@ -124,7 +49,7 @@ class WechatSpider:
                     info_content['builtin_video'] = False
         return info_content
 
-    def get_article_stats(self, article_url):
+    def _get_article_stats(self, article_url):
         mid = article_url.split("&")[1].split("=")[1]
         idx = article_url.split("&")[2].split("=")[1]
         sn = article_url.split("&")[3].split("=")[1]
@@ -145,14 +70,14 @@ class WechatSpider:
             "mid": mid,
             "sn": sn,
             "idx": idx,
-            "key": self.key,
-            "pass_ticket": self.pass_ticket,
-            "appmsg_token": self.appmsg_token,
-            "uin": self.uin,
+            "key": self.kwargs['key'],
+            "pass_ticket": self.kwargs['pass_ticket'],
+            "appmsg_token": self.kwargs['appmsg_token'],
+            "uin": self.kwargs['uin'],
             "wxtoken": "777",
         }
         info_stats = {}
-        resp = requests.post(api, headers=self.headers, data=data, params=params).json()
+        resp = requests.post(api, headers=self.kwargs['headers'], data=data, params=params).json()
         try:
             resp_stat = resp['appmsgstat']
             info_stats['read_num'] = resp_stat['read_num']
@@ -161,10 +86,10 @@ class WechatSpider:
         except KeyError:
             print('The appmsg_token, key, or pass ticket is incorrect.')
 
-    def get_article_comments(self, article_url):
+    def _get_article_comments(self, article_url):
         info_comments = {}
         try:
-            resp = requests.get(article_url, headers=self.headers, verify=False)
+            resp = requests.get(article_url, headers=self.kwargs['headers'], verify=False)
         except Exception:
             print('Cannot get comments.')
         else:
@@ -187,12 +112,12 @@ class WechatSpider:
             'comment_id': comment_id,
             'offset': '0',
             'limit': '100',
-            'uin': self.uin,
-            'key': self.key,
-            'pass_ticket': self.pass_ticket,
+            'uin': self.kwargs['uin'],
+            'key': self.kwargs['key'],
+            'pass_ticket': self.kwargs['pass_ticket'],
             'wxtoken': '777',
-            '__biz': self.fake_id,
-            'appmsg_token': self.appmsg_token,
+            '__biz': self.kwargs['fake_id'],
+            'appmsg_token': self.kwargs['appmsg_token'],
             'x5': '0',
             'f': 'json',
             'scene': '0'
@@ -201,7 +126,7 @@ class WechatSpider:
         api = 'https://mp.weixin.qq.com/mp/appmsg_comment'
 
         try:
-            resp = requests.get(api, headers=self.headers, params=params, verify=False).json()
+            resp = requests.get(api, headers=self.kwargs['headers'], params=params, verify=False).json()
         except Exception:
             pass
         else:
@@ -211,7 +136,7 @@ class WechatSpider:
                 elected_comment = resp['elected_comment']
                 for comment in elected_comment:
                     nick_name = comment.get('nick_name')
-                    comment_time = self.__convert_date(comment.get('create_time'))
+                    comment_time = convert_date(comment.get('create_time'))
                     content = comment.get('content')
                     content_id = comment.get('content_id')
                     like_num = comment.get('like_num')
@@ -223,20 +148,3 @@ class WechatSpider:
                         'like_num': like_num
                     })
             return comments
-
-    def save_mongo(self, data):
-        collection = self.client['wechat'][self.nickname]
-        inserted_articles = set(item['article_id'] for item in collection.find({}, {'_id': 0, 'article_id': 1}))
-        for info in data:
-            if info['article_id'] not in inserted_articles:
-                collection.insert_one(info)
-
-
-def main():
-    nickname = '饭统戴老板'
-    ws = WechatSpider(nickname)
-    ws.run(num=15, begin=0, count=5)
-
-
-if __name__ == '__main__':
-    main()
