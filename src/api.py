@@ -91,3 +91,6 @@ class WechatSpider:
                     self._save_mongo(page_info)
                 print(f"{count} articles in page {begin // count + 1} have been inserted to the database.")
             begin += count
+
+    def crawl_period_posts(self, start_date, end_date):
+        pass

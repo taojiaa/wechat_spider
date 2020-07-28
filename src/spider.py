@@ -77,7 +77,7 @@ class ArticleSpider:
             info_stats['like_num'] = resp_stat['like_num']
             return info_stats
         except KeyError:
-            print('The appmsg_token, key, or pass ticket is incorrect.')
+            Exception('The appmsg_token, key, or pass ticket is incorrect.')
 
     def _get_article_comments(self, article_url):
         info_comments = {}
