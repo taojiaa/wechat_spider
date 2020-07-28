@@ -93,6 +93,7 @@ class WechatSpider:
         info_comments = self.get_article_comments(url)
         info = {
             "article_id": item['aid'],
+            "type": 'article' if item['item_show_type'] == 0 else "video",
             "title": item['title'],
             "digest": item['digest'],
             "date": self.__convert_date(item['update_time']),
@@ -134,8 +135,7 @@ class WechatSpider:
             "Cookie":
             "rewardsn=;wxtokenkey=777;wxuin=683053783;devicetype=iPhoneiOS13.5.1;version=17000e28;lang=zh_CN",
             "User-Agent":
-            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/ \
-             537.36 MicroMessenger/6.5.2.501 NetType/WIFI WindowsWechat QBCore/3.43.901.400 QQBrowser/9.0.2524.400"
+            "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36 MicroMessenger/6.5.2.501 NetType/WIFI WindowsWechat QBCore/3.43.901.400 QQBrowser/9.0.2524.400"
         }
         data = {"is_only_read": "1", "is_temp_url": "0", "appmsg_type": "9", 'reward_uin_count': '0'}
 
@@ -150,13 +150,12 @@ class WechatSpider:
             "uin": self.uin,
             "wxtoken": "777",
         }
-
         info_stats = {}
         resp = requests.post(url, headers=headers, data=data, params=params).json()
-
         try:
-            info_stats['read_num'] = resp['read_num']
-            info_stats['like_num'] = resp['like_num']
+            resp_stat = resp['appmsgstat']
+            info_stats['read_num'] = resp_stat['read_num']
+            info_stats['like_num'] = resp_stat['like_num']
             return info_stats
         except KeyError:
             print('The token has been expired.')
@@ -229,11 +228,11 @@ class WechatSpider:
         inserted_articles = set(item['article_id'] for item in collection.find({}, {'_id': 0, 'article_id': 1}))
         for info in data:
             if info['article_id'] not in inserted_articles:
-                collection.insert_one(data)
+                collection.insert_one(info)
 
 
 def main():
-    nickname = '华东理工大学'
+    nickname = '大气爱智慧'
     ws = WechatSpider(nickname)
     ws.run(num=15, begin=0, count=5)
 
