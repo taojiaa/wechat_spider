@@ -2,7 +2,7 @@ import os
 import requests
 import time
 from pymongo import MongoClient
-from spider import ArticleSpider
+from src.spider import ArticleSpider
 
 
 class WechatSpider:

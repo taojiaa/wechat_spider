@@ -2,7 +2,7 @@ import requests
 import urllib3
 import re
 from bs4 import BeautifulSoup
-from utils import convert_date
+from src.utils import convert_date
 
 urllib3.disable_warnings()
 
