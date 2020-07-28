@@ -56,13 +56,6 @@ class ArticleSpider:
         _biz = article_url.split("&")[0].split("_biz=")[1]
 
         api = "http://mp.weixin.qq.com/mp/getappmsgext"
-        # headers = {
-        # "Cookie":
-        # "rewardsn=;wxtokenkey=777;wxuin=683053783;devicetype=iPhoneiOS13.5.1;version=17000e28;lang=zh_CN",
-        # "User-Agent":
-        # "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 \
-        # Safari/537.36 MicroMessenger/6.5.2.501 NetType/WIFI WindowsWechat QBCore/3.43.901.400 QQBrowser/9.0.2524.400"
-        # }
         data = {"is_only_read": "1", "is_temp_url": "0", "appmsg_type": "9", 'reward_uin_count': '0'}
 
         params = {
