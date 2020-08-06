@@ -78,15 +78,17 @@ class WechatSpider:
             if info['article_id'] not in inserted_articles:
                 collection.insert_one(info)
 
-    def crawl_latest_posts(self, num, begin=0, count=5):
-        while begin < num:
+    def crawl_latest_posts(self, num, begin, count):
+        while num > 0:
             page_info = []
-            time.sleep(0.2)
+            time.sleep(0.5)
             resp = self._get_article_list(begin, count)
             if resp['base_resp']['err_msg'] == 'ok' and resp['base_resp']['ret'] == 0 and "app_msg_list" in resp:
+                num_to_crawl = min(len(resp['app_msg_list']), num)
                 for item in resp["app_msg_list"]:
                     info = self.spider.get_article_info(item)
                     page_info.append(info)
                 self._save_mongo(page_info)
-                print(f"{count} articles in page {begin // count + 1} have been inserted to the database.")
-            begin += count
+                print(f"{num_to_crawl} articles have been inserted to the database.")
+            begin += num_to_crawl
+            num -= num_to_crawl
