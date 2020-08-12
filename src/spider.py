@@ -13,9 +13,9 @@ class ArticleSpider:
 
     def get_article_info(self, item):
         url = item['link']
+        self._pre_connect(url)
         info_stats = self._get_article_stats(url)
-        info_contents = self._get_article_contents(url)
-        info_comments = self._get_article_comments(url)
+        info_basics = self._get_article_basics(url)
         info = {
             "article_id": item['aid'],
             "type": 'video' if item['item_show_type'] == 5 else "article",
@@ -24,30 +24,18 @@ class ArticleSpider:
             "date": convert_date(item['update_time']),
             "url": item['link'],
         }
-        info.update(info_stats)
-        info.update(info_contents)
-        info.update(info_comments)
-        return info
-
-    def _get_article_contents(self, article_url):
-        info_content = {}
-        try:
-            html = requests.get(article_url, verify=False).text
-        except Exception:
-            print('Cannot get the article contents.')
+        if info_stats:
+            info.update(info_stats)
+            info.update(info_basics)
+            return info
         else:
-            bs = BeautifulSoup(html, 'html.parser')
-            js_content = bs.find(id='js_content')
-            if js_content:
-                p_list = js_content.find_all('p')
-                content_list = list(map(lambda p: p.text, filter(lambda p: p.text != '', p_list)))
-                info_content['content'] = ''.join(content_list)
+            return {}
 
-                if js_content.find(attrs={'class': 'video_iframe rich_pages'}):
-                    info_content['builtin_video'] = True
-                else:
-                    info_content['builtin_video'] = False
-        return info_content
+    def _pre_connect(self, article_url):
+        try:
+            resp = requests.get(article_url, headers=self.kwargs['headers'], verify=False)
+        except Exception:
+            pass
 
     def _get_article_stats(self, article_url):
         mid = article_url.split("&")[1].split("=")[1]
@@ -75,27 +63,48 @@ class ArticleSpider:
             resp_stat = resp['appmsgstat']
             info_stats['read_num'] = resp_stat['read_num']
             info_stats['like_num'] = resp_stat['like_num']
-            return info_stats
         except KeyError:
-            Exception('The appmsg_token, key, or pass ticket is incorrect.')
+            print('The appmsg_token, key, or pass ticket is incorrect.')
+        return info_stats
 
-    def _get_article_comments(self, article_url):
-        info_comments = {}
+    def _get_article_basics(self, article_url):
+        info_basics = {}
         try:
             resp = requests.get(article_url, headers=self.kwargs['headers'], verify=False)
         except Exception:
-            print('Cannot get comments.')
+            pass
         else:
             html = resp.text
-            str_comment = re.search(r'var comment_id = "(.*)" \|\| "(.*)" \* 1;', html)
-            str_msg = re.search(r'var appmsgid = (.*?);', html)
+            info_basics.update(self.__parse_article_content(html))
+            info_basics.update(self.__parse_article_comment(html))
+        return info_basics
 
-            if str_comment and str_msg:
-                comment_id = str_comment.group(1)
-                app_msg_id = re.search(r"\d+", str_msg.group(1)).group(0)
+    def __parse_article_content(self, html):
+        info_content = {}
+        bs = BeautifulSoup(html, 'html.parser')
+        js_content = bs.find(id='js_content')
+        if js_content:
+            p_list = js_content.find_all('p')
+            content_list = list(map(lambda p: p.text, filter(lambda p: p.text != '', p_list)))
+            info_content['content'] = ''.join(content_list)
 
-                if app_msg_id and comment_id:
-                    info_comments['comments'] = self.__crawl_comments(app_msg_id, comment_id)
+            if js_content.find(attrs={'class': 'video_iframe rich_pages'}):
+                info_content['builtin_video'] = True
+            else:
+                info_content['builtin_video'] = False
+        return info_content
+
+    def __parse_article_comment(self, html):
+        info_comments = {}
+        str_comment = re.search(r'var comment_id = "(.*)" \|\| "(.*)" \* 1;', html)
+        str_msg = re.search(r'var appmsgid = (.*?);', html)
+
+        if str_comment and str_msg:
+            comment_id = str_comment.group(1)
+            app_msg_id = re.search(r"\d+", str_msg.group(1)).group(0)
+
+            if app_msg_id and comment_id:
+                info_comments['comments'] = self.__crawl_comments(app_msg_id, comment_id)
         return info_comments
 
     def __crawl_comments(self, app_msg_id, comment_id):
